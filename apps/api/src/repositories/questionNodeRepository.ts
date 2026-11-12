@@ -60,7 +60,11 @@ export async function listNodesForInquiry(client: SupabaseClient, inquiryId: str
   const { data, error } = await client
     .from('question_nodes')
     .select(
-      'id, parent_node_id, user_question, ai_explanation, research_mode, is_trap, trap_metadata, trap_resolved_at, created_at, follow_up_questions(id, position, question_text, is_selected, child_node_id)',
+      // follow_up_questions has two FKs into question_nodes (question_node_id
+      // and child_node_id); the !question_node_id hint tells PostgREST which
+      // one to embed here — without it, the query 500s with "more than one
+      // relationship was found" (caught live against the real database).
+      'id, parent_node_id, user_question, ai_explanation, research_mode, is_trap, trap_metadata, trap_resolved_at, created_at, follow_up_questions!question_node_id(id, position, question_text, is_selected, child_node_id)',
     )
     .eq('inquiry_id', inquiryId)
     .order('created_at', { ascending: true });
