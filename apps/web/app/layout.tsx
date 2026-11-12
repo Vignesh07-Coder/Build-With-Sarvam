@@ -1,0 +1,15 @@
+import type { Metadata } from 'next';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Tattva',
+  description: 'Friction is the product. The immutable ledger of human cognitive labor.',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="h-screen overflow-hidden antialiased">{children}</body>
+    </html>
+  );
+}

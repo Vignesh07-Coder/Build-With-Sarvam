@@ -1,3 +1,4 @@
+
 # ADR-001: System Architecture — Modular Monolith with Next.js + Express + Supabase
 
 ## Status

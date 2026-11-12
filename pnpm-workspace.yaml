@@ -1,0 +1,12 @@
+# pnpm blocks dependency postinstall/build scripts by default (supply-chain
+# protection). esbuild's only install-time job is selecting its prebuilt
+# platform binary (needed transitively by tsx and vitest) — explicitly
+# allow-listed below (via `pnpm approve-builds esbuild`) rather than
+# blanket-approving every pending script.
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - prettier@3.10.0

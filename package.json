@@ -1,0 +1,26 @@
+{
+  "name": "tattva",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tattva — the immutable ledger of human cognitive labor (hackathon MVP monorepo)",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "dev": "pnpm run --recursive --parallel --filter=\"./apps/*\" dev",
+    "dev:web": "pnpm --filter @tattva/web dev",
+    "dev:api": "pnpm --filter @tattva/api dev",
+    "build": "pnpm run --recursive --filter=\"./apps/*\" build",
+    "lint": "pnpm run --recursive lint",
+    "typecheck": "pnpm run --recursive typecheck",
+    "test": "pnpm run --recursive test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "eslint": "10.14.0",
+    "prettier": "3.10.0",
+    "typescript": "6.0.3"
+  }
+}
