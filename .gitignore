@@ -8,6 +8,10 @@ coverage/
 .pnpm-store/
 .turbo/
 
+# Sarvam benchmark-only run output (apps/api/scripts/sarvam-benchmark.ts) — real
+# API call artifacts, not meant to be tracked; see docs/SARVAM_BENCHMARK_REPORT.md
+apps/api/scripts/.benchmark-output*.json
+
 # Environment files — commit only .env.example
 .env
 .env.local
