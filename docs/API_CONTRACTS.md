@@ -1,8 +1,10 @@
 # Tattva — API Contracts
 
-Status key: **Confirmed**, **Proposed**, **Pending** (see [ARCHITECTURE.md](ARCHITECTURE.md) for the definitions). This document specifies the initial API surface for the hackathon Golden Path. It is a design document; no endpoints are implemented from this file.
+Status key: **Confirmed**, **Proposed**, **Pending** (see [ARCHITECTURE.md](ARCHITECTURE.md) for the definitions). This document specifies the API surface for the hackathon Golden Path.
 
-Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md)
+Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md) · [implementation-status.md](implementation-status.md)
+
+**Stage 5 implementation note:** `GET /health`, `GET /api/v1/me`, `POST /api/v1/inquiries`, and `GET /api/v1/inquiries/:inquiryId` below are now implemented exactly as specified (see `apps/api/src/routes`). `POST /api/v1/inquiries/:inquiryId/nodes`, the trap-attempts endpoint, and `GET /api/v1/stamina/me` remain **Pending implementation** — explicitly out of Stage 5's scope. One endpoint not originally drafted here was added: **`GET /api/v1/inquiries`** (list the caller's own inquiries, §3a below), because the Stage 5 task brief required a "list inquiries belonging to the authenticated user" capability and [DATABASE.md §14](DATABASE.md#14-expected-query-patterns) already documents the matching query pattern (`WHERE user_id = $1 ORDER BY created_at DESC`).
 
 ## 0. Conventions (Proposed)
 
@@ -29,8 +31,9 @@ Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md)
 - **Request:** no body/params.
 - **Response `200`:**
   ```json
-  { "data": { "status": "ok" } }
+  { "status": "ok", "service": "tattva-api" }
   ```
+  **Reconciliation note:** this is a flat shape, not the `{ "data": ... }` envelope used by versioned `/api/v1` routes. Stage 3 (repository infrastructure) fixed this exact payload explicitly; §0's general envelope convention applies only to `/api/v1/*` routes, consistent with `/health` already being called out there as unversioned. The implementation at `apps/api/src/controllers/health.controller.ts` and the shared contract at `packages/contracts/src/health.ts` are the source of truth for this endpoint's shape.
 - **Validation:** none required.
 - **Errors:** none expected in normal operation; if critical configuration is missing the process should fail to start rather than serve a degraded `/health` (Confirmed, `CLAUDE.md` §5 — "optional integration credentials must not prevent the basic health check from starting" implies required ones may legitimately block startup).
 - **Database interactions:** none.
@@ -62,6 +65,21 @@ Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md)
 - **Expected errors:** `400` (bad/missing `learningSourceId`), `404` (`learningSourceId` does not exist), `401` (auth failure).
 - **Database interactions:** `INSERT` into `inquiries` with `user_id` taken from the verified token, **never** from the request body ([DATABASE.md §12](DATABASE.md#12-data-ownership-boundaries)).
 - **Authorization:** any authenticated user (including anonymous) may create an inquiry for themselves; there is no additional authorization check beyond "is authenticated."
+
+## 3a. `GET /api/v1/inquiries`
+
+**Purpose:** List the authenticated user's own inquiries (dashboard listing). Added in Stage 5 — see the implementation note above.
+
+- **Auth:** required.
+- **Request:** no body/params.
+- **Response `200`:**
+  ```json
+  { "data": [ { "id": "uuid", "userId": "uuid", "learningSourceId": "uuid", "title": "string | null", "createdAt": "iso8601", "updatedAt": "iso8601" } ] }
+  ```
+- **Validation:** none beyond auth.
+- **Expected errors:** `401` only, under normal operation.
+- **Database interactions:** `SELECT ... WHERE user_id = $1 ORDER BY created_at DESC` via the request-scoped (RLS-protected) client ([DATABASE.md §14](DATABASE.md#14-expected-query-patterns)).
+- **Authorization:** implicit — always scoped to the caller's own `user_id`.
 
 ## 3. `GET /api/v1/inquiries/:inquiryId`
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (anonymous sign-in is the recommended hackathon identity strategy; `CLAUDE.md` currently states the identity model is "undecided until explicitly chosen" — this ADR is the explicit choice it calls for, and should be treated as accepted once reviewed by the team, since it directly resolves that flagged gap).
+**Implemented** (Stage 5). Anonymous sign-in is live: `supabase/config.toml` enables `enable_anonymous_sign_ins`, `apps/web/lib/auth.ts` establishes/persists the session, and `apps/api/src/middleware/auth.middleware.ts` independently verifies every request's bearer token against Supabase Auth. This resolves the identity-model gap `CLAUDE.md` previously flagged as undecided.
 
 ## Context
 

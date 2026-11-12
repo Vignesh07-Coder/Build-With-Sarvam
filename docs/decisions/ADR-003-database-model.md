@@ -2,7 +2,7 @@
 
 ## Status
 
-Confirmed for the entity set and core constraints (directly specified by the PRD and architecture brief); Proposed for specific implementation choices called out below; Pending items are flagged explicitly and must not be silently decided during implementation.
+**Implemented** (Stage 5) for the entity set and core constraints: see `supabase/migrations/20261112120000_initial_schema.sql` for the versioned schema, indexes, RLS policies, and append-only grants matching this ADR and [DATABASE.md](../DATABASE.md). Specific implementation choices called out below remain Proposed where noted; Pending items (exact Stamina point values, idempotency key format) are still open and must not be silently decided.
 
 ## Context
 

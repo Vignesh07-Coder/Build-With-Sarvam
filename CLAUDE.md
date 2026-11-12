@@ -4,6 +4,8 @@ This is the persistent project guide for Claude Code. It contains the rules and 
 
 **Architecture documentation:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (system design, security model, Golden Path), [docs/DATABASE.md](docs/DATABASE.md) (schema, RLS, ledger strategy), [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) (endpoint surface), [docs/decisions/](docs/decisions/) (ADR-001 system architecture, ADR-002 authentication, ADR-003 database model). The original architecture task brief is preserved at `docs/architecture-brief.md`.
 
+**Setup documentation:** [docs/development-setup.md](docs/development-setup.md) (install, env, running dev, Supabase CLI workflow, troubleshooting), [docs/environment-variables.md](docs/environment-variables.md) (full env var reference).
+
 ## 1. Product context
 
 **Tattva's principle: Friction is the product.** Tattva is a high-friction technical learning and capability-verification platform—not a generic chatbot, short-form content platform, or conventional EdTech app. It aims to make a learner's technical inquiry, reasoning, persistence, and demonstrated understanding visible and measurable.
@@ -102,7 +104,7 @@ Use `/api/v1` for product API routes. A basic health check may be `/health`.
 - Award eligibility, points, multipliers, and ledger writes are trusted backend operations.
 - Apply least privilege and RLS wherever browser-accessible Supabase resources exist.
 - **Do not expose a Supabase secret/service-role key to the browser.**
-- Authentication and demo-user strategy: **[ADR-002](docs/decisions/ADR-002-authentication.md) proposes Supabase anonymous sign-in** as the resolution to this previously-undecided item (canonical identity = Supabase Auth user UUID, backend-verified token, documented upgrade path and limitations). Treat ADR-002 as the current proposed answer; confirm it with the team before relying on it as final, since this line previously stated the strategy was fully undecided.
+- Authentication and demo-user strategy: **[ADR-002](docs/decisions/ADR-002-authentication.md) is implemented** — Supabase anonymous sign-in (canonical identity = Supabase Auth user UUID, backend-verified token on every request, documented upgrade path and limitations).
 
 ### Sarvam integration
 
