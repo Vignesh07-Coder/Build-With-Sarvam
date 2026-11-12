@@ -16,13 +16,32 @@ export interface DemoInquirySession {
   isAnonymous: boolean;
 }
 
+let inFlight: Promise<DemoInquirySession> | null = null;
+
 /**
  * Establishes an authenticated anonymous session (ADR-002) and ensures a
  * real `inquiries` row exists for this browser's demo source — reusing one
  * if this identity already created it, rather than creating a new row on
  * every reload.
+ *
+ * Callers share one in-flight attempt (via `inFlight`) rather than each
+ * running their own list-then-create check: React's dev-mode double effect
+ * invocation (and any other concurrent caller within the same page load)
+ * would otherwise race the "does an inquiry already exist" check and both
+ * fall through to creating one, producing duplicate rows.
  */
-export async function ensureDemoInquiry(): Promise<DemoInquirySession> {
+export function ensureDemoInquiry(): Promise<DemoInquirySession> {
+  if (!inFlight) {
+    inFlight = createOrReuseDemoInquiry().catch((error: unknown) => {
+      inFlight = null; // allow a retry on the next call rather than caching a failure
+      throw error;
+    });
+  }
+
+  return inFlight;
+}
+
+async function createOrReuseDemoInquiry(): Promise<DemoInquirySession> {
   await getAccessToken();
   const me = await getMe();
 

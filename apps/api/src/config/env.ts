@@ -1,4 +1,11 @@
+import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
+
+// Loads apps/api/.env into process.env. Must run before envSchema.safeParse
+// below — nothing else in this app reads .env otherwise (tsx/node don't do
+// this automatically), which previously left SUPABASE_URL/SUPABASE_ANON_KEY
+// unset even when the file had real values.
+loadDotenv();
 
 /**
  * Server-side environment contract for apps/api.
