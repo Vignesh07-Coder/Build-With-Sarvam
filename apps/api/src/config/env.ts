@@ -28,6 +28,13 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_ANON_KEY: z.string().min(1).optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+
+  // Shared secret gating the source-ingestion endpoints (routes/sourceProcessing.routes.ts),
+  // which write via the privileged service-role client. `requireAuth` alone is not a sufficient
+  // gate for those routes — any anonymous Supabase Auth session passes it — so this key narrows
+  // that privileged write path to trusted callers, per docs/ARCHITECTURE.md §6.3's "narrowly
+  // restrict service-role operations to trusted workflows" rule.
+  INTERNAL_INGESTION_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

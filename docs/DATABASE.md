@@ -123,6 +123,43 @@ The append-only Cognitive Stamina ledger (PRD §10). Server-authored only; immut
 **Check constraints:** `final_points = base_points * multiplier` (Proposed — enforceable as a `CHECK`, or computed and trusted at the application layer if rounding semantics make the DB check brittle; recommend the DB check for a hard guarantee), `base_points >= 0`, `multiplier > 0`.
 **No `UPDATE`/`DELETE` grants** for the application's database role on this table beyond `INSERT`/`SELECT` — see §11.
 
+### 3.6 `source_content`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid`, PK, default `gen_random_uuid()` | Content record identity |
+| `learning_source_id` | `uuid`, not null, FK → `learning_sources.id`, UNIQUE | 1:1 link; each source has at most one content record |
+| `raw_body` | `text`, not null | Full raw text/transcript content |
+| `content_hash` | `text`, not null | SHA-256 hash of `raw_body` for change detection / deduplication |
+| `processing_status` | `text`, not null, default `'pending'` | `'pending'` \| `'processing'` \| `'completed'` \| `'failed'` |
+| `processing_error` | `text`, nullable | Human-readable error message when `processing_status = 'failed'` |
+| `processed_at` | `timestamptz`, nullable | Timestamp when processing completed successfully |
+| `created_at` | `timestamptz`, not null, default `now()` | |
+| `updated_at` | `timestamptz`, not null, default `now()` | |
+
+**Primary key:** `id`.
+**Foreign keys:** `learning_source_id → learning_sources.id` (`ON DELETE CASCADE`).
+**Unique constraints:** `UNIQUE (learning_source_id)` — enforces 1:1.
+**Check constraints:** `processing_status IN ('pending', 'processing', 'completed', 'failed')`.
+**Indexes:** `(processing_status)` partial index for querying pending/processing content.
+
+### 3.7 `source_chunks`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid`, PK, default `gen_random_uuid()` | Chunk identity |
+| `source_content_id` | `uuid`, not null, FK → `source_content.id` | Parent content record |
+| `chunk_index` | `integer`, not null, `CHECK (chunk_index >= 0)` | 0-based position within the source |
+| `body` | `text`, not null | The chunk's text content |
+| `token_count` | `integer`, nullable | Estimated token count (populated during processing) |
+| `metadata` | `jsonb`, nullable | Optional structural metadata (heading, timestamp range, etc.) — shape depends on `source_type`; not frozen |
+| `created_at` | `timestamptz`, not null, default `now()` | |
+
+**Primary key:** `id`.
+**Foreign keys:** `source_content_id → source_content.id` (`ON DELETE CASCADE`).
+**Unique constraints:** `UNIQUE (source_content_id, chunk_index)` — prevents duplicate positions.
+**Check constraints:** `chunk_index >= 0`.
+
 ## 4. `trap_metadata` shape (Proposed, pending UX finalization)
 
 ```json
@@ -169,6 +206,8 @@ Rationale: storing a mutable running balance on the `auth.users`-linked profile 
 |---|---|---|
 | `auth.users` → `inquiries` | 1 : N | FK `inquiries.user_id` |
 | `learning_sources` → `inquiries` | 1 : N | FK `inquiries.learning_source_id` |
+| `learning_sources` → `source_content` | 1 : 0..1 | FK + UNIQUE `source_content.learning_source_id` |
+| `source_content` → `source_chunks` | 1 : N | FK `source_chunks.source_content_id` |
 | `inquiries` → `question_nodes` | 1 : N | FK `question_nodes.inquiry_id` |
 | `question_nodes` → `question_nodes` (self) | 1 : N (parent → children) | FK `question_nodes.parent_node_id` |
 | `question_nodes` → `follow_up_questions` | 1 : exactly 3 (once complete) | FK + unique `(question_node_id, position)` + application transaction (§3.4) |
@@ -182,6 +221,8 @@ Rationale: storing a mutable running balance on the `auth.users`-linked profile 
 erDiagram
     USERS ||--o{ INQUIRIES : owns
     LEARNING_SOURCES ||--o{ INQUIRIES : studied_in
+    LEARNING_SOURCES ||--o| SOURCE_CONTENT : "has content"
+    SOURCE_CONTENT ||--o{ SOURCE_CHUNKS : "split into"
     INQUIRIES ||--o{ QUESTION_NODES : contains
     QUESTION_NODES ||--o{ QUESTION_NODES : "parent of"
     QUESTION_NODES ||--|{ FOLLOW_UP_QUESTIONS : generates
@@ -200,6 +241,23 @@ erDiagram
         text source_type
         int duration_minutes
         text source_reference
+    }
+    SOURCE_CONTENT {
+        uuid id PK
+        uuid learning_source_id FK
+        text raw_body
+        text content_hash
+        text processing_status
+        text processing_error
+        timestamptz processed_at
+    }
+    SOURCE_CHUNKS {
+        uuid id PK
+        uuid source_content_id FK
+        int chunk_index
+        text body
+        int token_count
+        jsonb metadata
     }
     INQUIRIES {
         uuid id PK
@@ -244,6 +302,7 @@ See [ARCHITECTURE.md §6 Security Architecture](ARCHITECTURE.md#6-security-archi
 
 - **`auth.users`** is managed entirely by Supabase Auth; the application never writes to it directly.
 - **`learning_sources`**: `SELECT` allowed for any authenticated (including anonymous) role — `USING (auth.role() = 'authenticated')`. No `INSERT`/`UPDATE`/`DELETE` policy for the browser; curated content is seeded via privileged backend/migration tooling only.
+- **`source_content`**, **`source_chunks`**: `SELECT` allowed for any authenticated role — same read-only posture as `learning_sources`. No write policies for `authenticated`/`anon`; all writes happen via privileged tooling or seed scripts. These tables are curated content infrastructure, not user-generated data.
 - **`inquiries`**, **`question_nodes`**, **`follow_up_questions`**: `SELECT`/`INSERT` policies scoped to `USING (user_id = auth.uid())` / `WITH CHECK (user_id = auth.uid())` (directly on `inquiries`; on `question_nodes`/`follow_up_questions` via a join back to the owning `inquiries.user_id`, since those tables don't carry `user_id` directly). No `UPDATE`/`DELETE` policy for ordinary users in the MVP — nodes are immutable once created (Proposed; revisit if editing is added later).
 - **`wallet_transactions`**: `SELECT` policy `USING (user_id = auth.uid())` so a user can read their own balance/history. **No `INSERT`/`UPDATE`/`DELETE` policy for the `authenticated` role at all** — all ledger writes happen through the backend's privileged (service-role) connection, inside a trusted service method, never via a user-scoped Supabase client. This is the one table where RLS intentionally grants zero direct write access to end users; see ARCHITECTURE.md for why this is safe only because the backend enforces authorization before using its privileged credential.
 
@@ -262,6 +321,8 @@ See [ARCHITECTURE.md §6 Security Architecture](ARCHITECTURE.md#6-security-archi
 | Table | Owning layer | Written by |
 |---|---|---|
 | `learning_sources` | Content curation (hackathon: Member 4 / seed script) | Privileged backend tooling / migration seed only |
+| `source_content` | Content curation / ingestion tooling | Privileged backend tooling / seed only |
+| `source_chunks` | Content processing pipeline | Privileged backend tooling / seed only |
 | `inquiries` | `apps/api` inquiry service | Backend, on behalf of the authenticated user |
 | `question_nodes` | `apps/api` inquiry service | Backend only, after validating Sarvam output |
 | `follow_up_questions` | `apps/api` inquiry service | Backend only, in the same transaction as the parent node |
@@ -272,7 +333,7 @@ The browser never writes directly to any of these tables from the client, even w
 ## 13. Referential integrity
 
 - All foreign keys above are `NOT NULL` unless explicitly marked nullable.
-- `ON DELETE CASCADE` is used where the child record is meaningless without its parent (`inquiries` under a user, `question_nodes` under an inquiry, `follow_up_questions` under a node) — deleting a user or an inquiry cleanly removes their owned tree.
+- `ON DELETE CASCADE` is used where the child record is meaningless without its parent (`inquiries` under a user, `question_nodes` under an inquiry, `follow_up_questions` under a node, `source_content` under a `learning_sources` row, `source_chunks` under `source_content`) — deleting a user or an inquiry cleanly removes their owned tree; deleting a learning source removes its content and chunks.
 - `ON DELETE RESTRICT` on `inquiries.learning_source_id` prevents deleting a `learning_sources` row that still has active inquiries referencing it (curated content shouldn't disappear under active learners).
 - `ON DELETE SET NULL` is used on `wallet_transactions`' optional references and `follow_up_questions.child_node_id`, so the ledger and a pre-selection follow-up row survive even if the referenced node is later removed — the ledger must never cascade-delete, since that would break the audit trail.
 
@@ -286,6 +347,9 @@ The browser never writes directly to any of these tables from the client, even w
 | Compute Stamina balance | `SELECT SUM(final_points) WHERE user_id = $1` | `(user_id)` on `wallet_transactions` |
 | Stamina history (audit view) | `WHERE user_id = $1 ORDER BY created_at DESC` | `(user_id, created_at DESC)` |
 | Idempotency check before insert | `WHERE idempotency_key = $1` | unique index (also serves as lookup index) |
+| Load source content for a learning source | `WHERE learning_source_id = $1` on `source_content` | unique index `(learning_source_id)` |
+| Load ordered chunks for a source | `WHERE source_content_id = $1 ORDER BY chunk_index` on `source_chunks` | unique index `(source_content_id, chunk_index)` |
+| Find content needing processing | `WHERE processing_status IN ('pending', 'processing')` on `source_content` | partial index `(processing_status)` |
 
 ## 15. Future scalability considerations (out of MVP scope)
 
