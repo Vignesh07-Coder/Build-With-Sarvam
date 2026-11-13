@@ -51,6 +51,19 @@ function mapNode(row: QuestionNodeRow): QuestionNode {
 }
 
 /**
+ * Minimal ancestry-chain row, used by `services/graphContext.ts` to walk
+ * `parent_node_id` one hop at a time without pulling in follow-ups or other
+ * inquiry nodes it doesn't need (docs/INTELLIGENCE_ARCHITECTURE.md §3).
+ */
+export interface AncestorNodeRow {
+  id: string;
+  inquiryId: string;
+  parentNodeId: string | null;
+  userQuestion: string;
+  aiExplanation: string;
+}
+
+/**
  * Read-only access to `question_nodes` + `follow_up_questions` for the
  * inquiry detail endpoint (docs/API_CONTRACTS.md §3, docs/DATABASE.md §3.3/
  * §3.4). No node-creation path exists yet in Stage 5 — this repository is
@@ -74,4 +87,33 @@ export async function listNodesForInquiry(client: SupabaseClient, inquiryId: str
   }
 
   return (data ?? []).map((row) => mapNode(row as unknown as QuestionNodeRow));
+}
+
+/**
+ * Fetches exactly one `question_nodes` row by id, for bounded ancestry
+ * traversal (`services/graphContext.ts`). Deliberately narrower than
+ * `listNodesForInquiry` — it never pulls follow-ups or sibling nodes, so a
+ * deep ancestry walk costs one row read per hop instead of one query for
+ * the whole inquiry tree.
+ */
+export async function findNodeById(client: SupabaseClient, nodeId: string): Promise<AncestorNodeRow | null> {
+  const { data, error } = await client
+    .from('question_nodes')
+    .select('id, inquiry_id, parent_node_id, user_question, ai_explanation')
+    .eq('id', nodeId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load question node ${nodeId}: ${error.message}`);
+  }
+
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    inquiryId: data.inquiry_id,
+    parentNodeId: data.parent_node_id,
+    userQuestion: data.user_question,
+    aiExplanation: data.ai_explanation,
+  };
 }

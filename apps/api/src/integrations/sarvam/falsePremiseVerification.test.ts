@@ -55,6 +55,45 @@ describe('verifyFalsePremiseQuote', () => {
 
     expect(result).toEqual({ verified: true, reason: null });
   });
+
+  // Regression for the Stage 6B.1 benchmark finding (docs/SARVAM_BENCHMARK_REPORT.md §12.4):
+  // Sarvam sometimes wraps FALSE_PREMISE_QUOTE in its own literal quotation marks even though the
+  // quoted text itself is a genuine, exact substring of the student's question. A naive
+  // `includes()` check then incorrectly rejects a true positive (e.g. TEST_04's
+  // `"objects allocated inside it can safely outlive the arena"`), discarding a legitimate trap.
+  it('verifies a genuinely verbatim quote even when the model wraps it in double quotation marks', () => {
+    const question =
+      'Since an arena allocator frees all its memory at once, objects allocated inside it can safely outlive the arena, right?';
+    const modelWrappedQuote = '"objects allocated inside it can safely outlive the arena"';
+
+    const result = verifyFalsePremiseQuote(question, modelWrappedQuote, HIGH_CONFIDENCE_MISCONCEPTION);
+
+    expect(result).toEqual({ verified: true, reason: null });
+  });
+
+  it('verifies a genuinely verbatim quote wrapped in single quotation marks', () => {
+    const question = 'Since the allocator never frees individual blocks, memory usage can never shrink, right?';
+    const modelWrappedQuote = "'memory usage can never shrink'";
+
+    const result = verifyFalsePremiseQuote(question, modelWrappedQuote, HIGH_CONFIDENCE_MISCONCEPTION);
+
+    expect(result).toEqual({ verified: true, reason: null });
+  });
+
+  it('still rejects a fabricated quote even after stripping wrapping quotation marks', () => {
+    const question = 'Why does an arena allocator make bulk memory reclamation efficient?';
+    const fabricatedWrappedQuote = '"memory can never be reclaimed"';
+
+    const result = verifyFalsePremiseQuote(question, fabricatedWrappedQuote, HIGH_CONFIDENCE_MISCONCEPTION);
+
+    expect(result.verified).toBe(false);
+  });
+
+  it('rejects a quote that is only wrapping quotation marks with nothing inside', () => {
+    const result = verifyFalsePremiseQuote('Any question text.', '""', HIGH_CONFIDENCE_MISCONCEPTION);
+
+    expect(result.verified).toBe(false);
+  });
 });
 
 describe('resolveVerifiedMisconception', () => {
